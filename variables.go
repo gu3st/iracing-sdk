@@ -12,7 +12,7 @@ type varBuffer struct {
 	bufOffset int // offset from header
 }
 
-type variable struct {
+type Variable struct {
 	varType     int // irsdk_VarType
 	offset      int // offset fron start of buffer row
 	count       int // number of entrys (array) so length in bytes would be irsdk_VarTypeBytes[type] * count
@@ -24,7 +24,7 @@ type variable struct {
 	rawBytes    []byte
 }
 
-func (v variable) String() string {
+func (v Variable) String() string {
 	var ret string
 	switch v.varType {
 	case 0:
@@ -48,7 +48,7 @@ func (v variable) String() string {
 // TelemetryVars holds all variables we can read from telemetry live
 type TelemetryVars struct {
 	lastVersion int
-	vars        map[string]variable
+	vars        map[string]Variable
 	mux         sync.Mutex
 }
 
@@ -76,14 +76,14 @@ func findLatestBuffer(r reader, h *header) varBuffer {
 }
 
 func readVariableHeaders(r reader, h *header) *TelemetryVars {
-	vars := TelemetryVars{vars: make(map[string]variable, h.numVars)}
+	vars := TelemetryVars{vars: make(map[string]Variable, h.numVars)}
 	for i := 0; i < h.numVars; i++ {
 		rbuf := make([]byte, 144)
 		_, err := r.ReadAt(rbuf, int64(h.headerOffset+i*144))
 		if err != nil {
 			log.Fatal(err)
 		}
-		v := variable{
+		v := Variable{
 			byte4ToInt(rbuf[0:4]),
 			byte4ToInt(rbuf[4:8]),
 			byte4ToInt(rbuf[8:12]),
