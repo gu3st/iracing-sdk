@@ -74,7 +74,6 @@ func main(){
     defer sdk.Close()
 }
 
-...
 ```
 
 ## Examples
