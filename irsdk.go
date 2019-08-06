@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hidez8891/shm"
 	"github.com/gu3st/iracing-sdk/lib/winevents"
+	"github.com/hidez8891/shm"
 )
 
 // IRSDK is the main SDK object clients must use

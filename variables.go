@@ -14,9 +14,9 @@ type varBuffer struct {
 }
 
 type Variable struct {
-	varType     VarType // irsdk_VarType
-	offset      int // offset fron start of buffer row
-	count       int // number of entrys (array) so length in bytes would be irsdk_VarTypeBytes[type] * count
+	varType     varType // irsdk_VarType
+	offset      int     // offset fron start of buffer row
+	count       int     // number of entrys (array) so length in bytes would be irsdk_VarTypeBytes[type] * count
 	countAsTime bool
 	Name        string
 	Desc        string
@@ -25,14 +25,15 @@ type Variable struct {
 	rawBytes    []byte
 }
 
-type VarType int
+type varType int
+
 const (
-	irVarTypeChar VarType = 0
-	irVarTypeBool = 1
-	irVarTypeInt = 2
-	irVarTypeBitField = 3
-	irVarTypeFloat = 4
-	irVarTypeDouble = 5
+	irVarTypeChar     varType = 0
+	irVarTypeBool             = 1
+	irVarTypeInt              = 2
+	irVarTypeBitField         = 3
+	irVarTypeFloat            = 4
+	irVarTypeDouble           = 5
 )
 
 func (v Variable) String() string {
@@ -58,13 +59,12 @@ func (v Variable) String() string {
 
 func (v Variable) getSize() int {
 	switch v.varType {
-		case irVarTypeChar, irVarTypeBool:
-			return 1
-		case irVarTypeInt, irVarTypeBitField, irVarTypeFloat:
-			return 4
-		case irVarTypeDouble:
-			return 8
-		default:
+	case irVarTypeChar, irVarTypeBool:
+		return 1
+	case irVarTypeInt, irVarTypeBitField, irVarTypeFloat:
+		return 4
+	case irVarTypeDouble:
+		return 8
 	}
 	log.Fatalf("Attempted to get size on unknown variable type %d", v.varType)
 	return -1
@@ -72,16 +72,18 @@ func (v Variable) getSize() int {
 
 func (v Variable) getVal(bytes []byte) (interface{}, error) {
 	switch v.varType {
-		case irVarTypeChar:
-			return string(bytes[0]), nil
-		case irVarTypeBool:
-			return bytes[0] > 0, nil
-		case irVarTypeInt, irVarTypeBitField:
-			return byte4ToInt32(bytes), nil
-		case irVarTypeFloat:
-			return byte4ToFloat(bytes), nil
-		case irVarTypeDouble:
-			return byte8ToFloat(bytes), nil
+	case irVarTypeChar:
+		return string(bytes[0]), nil
+	case irVarTypeBool:
+		return bytes[0] > 0, nil
+	case irVarTypeInt:
+		return byte4ToInt32(bytes), nil
+	case irVarTypeBitField:
+		return byte4toBitField(bytes), nil
+	case irVarTypeFloat:
+		return byte4ToFloat(bytes), nil
+	case irVarTypeDouble:
+		return byte8ToFloat(bytes), nil
 	}
 	return nil, errors.New(fmt.Sprintf("Unable to convert type %d to a value", v.varType))
 }
@@ -140,7 +142,6 @@ func readVariableHeaders(r reader, h *header) *TelemetryVars {
 	return &vars
 }
 
-
 func readVariableValues(sdk *IRSDK) bool {
 	newData := false
 	if sessionStatusOK(sdk.h.status) {
@@ -154,14 +155,14 @@ func readVariableValues(sdk *IRSDK) bool {
 			for varName, v := range sdk.tVars.vars {
 				var rbuf []byte
 				var bufIdx int
-				rbuf = make([]byte, v.count * v.getSize())
+				rbuf = make([]byte, v.count*v.getSize())
 				_, err := sdk.r.ReadAt(rbuf, int64(vb.bufOffset+v.offset))
-				if err != nil{
+				if err != nil {
 					log.Fatal(err)
 				}
 				if v.count > 1 {
-					vals := make([]interface{},v.count)
-					for bufIdx = 0; bufIdx < v.count; bufIdx++{
+					vals := make([]interface{}, v.count)
+					for bufIdx = 0; bufIdx < v.count; bufIdx++ {
 						startOff := bufIdx * v.getSize()
 						endOff := startOff + v.getSize()
 						val, _ := v.getVal(rbuf[startOff:endOff])
