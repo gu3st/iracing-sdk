@@ -11,6 +11,10 @@ func byte4ToInt(in []byte) int {
 	return int(binary.LittleEndian.Uint32(in))
 }
 
+func byte4ToVarType(in []byte) VarType{
+	return VarType(binary.LittleEndian.Uint32(in))
+}
+
 func byte4ToInt32(in []byte) int32 {
 	return int32(binary.LittleEndian.Uint32(in))
 }

@@ -14,7 +14,7 @@ type varBuffer struct {
 }
 
 type Variable struct {
-	varType     int // irsdk_VarType
+	varType     VarType // irsdk_VarType
 	offset      int // offset fron start of buffer row
 	count       int // number of entrys (array) so length in bytes would be irsdk_VarTypeBytes[type] * count
 	countAsTime bool
@@ -25,9 +25,9 @@ type Variable struct {
 	rawBytes    []byte
 }
 
-
+type VarType int
 const (
-	irVarTypeChar = 0
+	irVarTypeChar VarType = 0
 	irVarTypeBool = 1
 	irVarTypeInt = 2
 	irVarTypeBitField = 3
@@ -125,7 +125,7 @@ func readVariableHeaders(r reader, h *header) *TelemetryVars {
 			log.Fatal(err)
 		}
 		v := Variable{
-			byte4ToInt(rbuf[0:4]),
+			byte4ToVarType(rbuf[0:4]),
 			byte4ToInt(rbuf[4:8]),
 			byte4ToInt(rbuf[8:12]),
 			int(rbuf[12]) > 0,
