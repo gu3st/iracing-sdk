@@ -10,6 +10,11 @@ import (
 func byte4ToInt(in []byte) int {
 	return int(binary.LittleEndian.Uint32(in))
 }
+
+func byte4ToInt32(in []byte) int32 {
+	return int32(binary.LittleEndian.Uint32(in))
+}
+
 func byte4ToFloat(in []byte) float32 {
 	bits := binary.LittleEndian.Uint32(in)
 	return math.Float32frombits(bits)

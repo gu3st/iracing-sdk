@@ -1,6 +1,7 @@
 package irsdk
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"sync"
@@ -24,25 +25,65 @@ type Variable struct {
 	rawBytes    []byte
 }
 
+
+const (
+	irVarTypeChar = 0
+	irVarTypeBool = 1
+	irVarTypeInt = 2
+	irVarTypeBitField = 3
+	irVarTypeFloat = 4
+	irVarTypeDouble = 5
+)
+
 func (v Variable) String() string {
 	var ret string
 	switch v.varType {
-	case 0:
+	case irVarTypeChar:
 		ret = fmt.Sprintf("%c", v.Value)
-	case 1:
+	case irVarTypeBool:
 		ret = fmt.Sprintf("%v", v.Value)
-	case 2:
+	case irVarTypeInt:
 		ret = fmt.Sprintf("%d", v.Value)
-	case 3:
+	case irVarTypeBitField:
 		ret = fmt.Sprintf("%s", v.Value)
-	case 4:
+	case irVarTypeFloat:
 		ret = fmt.Sprintf("%f", v.Value)
-	case 5:
+	case irVarTypeDouble:
 		ret = fmt.Sprintf("%f", v.Value)
 	default:
 		ret = fmt.Sprintf("Unknown (%d)", v.varType)
 	}
 	return ret
+}
+
+func (v Variable) getSize() int {
+	switch v.varType {
+		case irVarTypeChar, irVarTypeBool:
+			return 1
+		case irVarTypeInt, irVarTypeBitField, irVarTypeFloat:
+			return 4
+		case irVarTypeDouble:
+			return 8
+		default:
+	}
+	log.Fatalf("Attempted to get size on unknown variable type %d", v.varType)
+	return -1
+}
+
+func (v Variable) getVal(bytes []byte) (interface{}, error) {
+	switch v.varType {
+		case irVarTypeChar:
+			return string(bytes[0]), nil
+		case irVarTypeBool:
+			return bytes[0] > 0, nil
+		case irVarTypeInt, irVarTypeBitField:
+			return byte4ToInt32(bytes), nil
+		case irVarTypeFloat:
+			return byte4ToFloat(bytes), nil
+		case irVarTypeDouble:
+			return byte8ToFloat(bytes), nil
+	}
+	return nil, errors.New(fmt.Sprintf("Unable to convert type %d to a value", v.varType))
 }
 
 // TelemetryVars holds all variables we can read from telemetry live
@@ -99,6 +140,7 @@ func readVariableHeaders(r reader, h *header) *TelemetryVars {
 	return &vars
 }
 
+
 func readVariableValues(sdk *IRSDK) bool {
 	newData := false
 	if sessionStatusOK(sdk.h.status) {
@@ -111,49 +153,24 @@ func readVariableValues(sdk *IRSDK) bool {
 			sdk.lastValidData = time.Now().Unix()
 			for varName, v := range sdk.tVars.vars {
 				var rbuf []byte
-				switch v.varType {
-				case 0:
-					rbuf = make([]byte, 1)
-					_, err := sdk.r.ReadAt(rbuf, int64(vb.bufOffset+v.offset))
-					if err != nil {
-						log.Fatal(err)
+				var bufIdx int
+				rbuf = make([]byte, v.count * v.getSize())
+				_, err := sdk.r.ReadAt(rbuf, int64(vb.bufOffset+v.offset))
+				if err != nil{
+					log.Fatal(err)
+				}
+				if v.count > 1 {
+					vals := make([]interface{},v.count)
+					for bufIdx = 0; bufIdx < v.count; bufIdx++{
+						startOff := bufIdx * v.getSize()
+						endOff := startOff + v.getSize()
+						val, _ := v.getVal(rbuf[startOff:endOff])
+						vals[bufIdx] = val
 					}
-					v.Value = string(rbuf[0])
-				case 1:
-					rbuf = make([]byte, 1)
-					_, err := sdk.r.ReadAt(rbuf, int64(vb.bufOffset+v.offset))
-					if err != nil {
-						log.Fatal(err)
-					}
-					v.Value = int(rbuf[0]) > 0
-				case 2:
-					rbuf = make([]byte, 4)
-					_, err := sdk.r.ReadAt(rbuf, int64(vb.bufOffset+v.offset))
-					if err != nil {
-						log.Fatal(err)
-					}
-					v.Value = byte4ToInt(rbuf)
-				case 3:
-					rbuf = make([]byte, 4)
-					_, err := sdk.r.ReadAt(rbuf, int64(vb.bufOffset+v.offset))
-					if err != nil {
-						log.Fatal(err)
-					}
-					v.Value = byte4toBitField(rbuf)
-				case 4:
-					rbuf = make([]byte, 4)
-					_, err := sdk.r.ReadAt(rbuf, int64(vb.bufOffset+v.offset))
-					if err != nil {
-						log.Fatal(err)
-					}
-					v.Value = byte4ToFloat(rbuf)
-				case 5:
-					rbuf = make([]byte, 8)
-					_, err := sdk.r.ReadAt(rbuf, int64(vb.bufOffset+v.offset))
-					if err != nil {
-						log.Fatal(err)
-					}
-					v.Value = byte8ToFloat(rbuf)
+					v.Value = vals
+				} else {
+					val, _ := v.getVal(rbuf)
+					v.Value = val
 				}
 				v.rawBytes = rbuf
 				sdk.tVars.vars[varName] = v
