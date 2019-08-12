@@ -2,21 +2,20 @@ package irsdk
 
 import (
 	"fmt"
+	"github.com/gu3st/iracing-sdk/lib/winevents"
+	"github.com/gu3st/yaml"
+	"github.com/hidez8891/shm"
 	"io/ioutil"
 	"log"
-	"strings"
 	"time"
-
-	"github.com/gu3st/iracing-sdk/lib/winevents"
-	"github.com/hidez8891/shm"
 )
 
 // IRSDK is the main SDK object clients must use
 type IRSDK struct {
 	r             reader
 	h             *header
-	s             []string
 	tVars         *TelemetryVars
+	sessionData *SessionData
 	lastValidData int64
 }
 
@@ -25,6 +24,7 @@ func (sdk *IRSDK) WaitForData(timeout time.Duration) bool {
 		initIRSDK(sdk)
 	}
 	if winevents.WaitForSingleObject(timeout) {
+		readSessionData(sdk)
 		return readVariableValues(sdk)
 	}
 	return false
@@ -53,11 +53,11 @@ func (sdk *IRSDK) GetLastVersion() int {
 	return last
 }
 
-func (sdk *IRSDK) GetSessionData(path string) (string, error) {
+func (sdk *IRSDK) GetSessionData() (*SessionData, error) {
 	if !sessionStatusOK(sdk.h.status) {
-		return "", fmt.Errorf("Session not connected")
+		return nil, fmt.Errorf("Session not connected")
 	}
-	return getSessionDataPath(sdk.s, path)
+	return sdk.sessionData, nil
 }
 
 func (sdk *IRSDK) IsConnected() bool {
@@ -81,9 +81,16 @@ func (sdk *IRSDK) ExportIbtTo(fileName string) {
 }
 
 // ExportTo exports current session yaml data to a file
-func (sdk *IRSDK) ExportSessionTo(fileName string) {
-	y := strings.Join(sdk.s, "\n")
-	ioutil.WriteFile(fileName, []byte(y), 0644)
+func (sdk *IRSDK) ExportSessionTo(fileName string) error {
+	sd, err := yaml.Marshal(sdk.sessionData)
+	if err != nil {
+		return fmt.Errorf("Failed to convert session data to YAML string")
+	}
+	err = ioutil.WriteFile(fileName, sd, 0644)
+	if err != nil {
+		return fmt.Errorf("Failed to write session data to file")
+	}
+	return nil
 }
 
 func (sdk *IRSDK) BroadcastMsg(msg Msg) {
@@ -117,13 +124,13 @@ func Init(r reader) IRSDK {
 func initIRSDK(sdk *IRSDK) {
 	h := readHeader(sdk.r)
 	sdk.h = &h
-	sdk.s = nil
 	if sdk.tVars != nil {
 		sdk.tVars.vars = nil
 	}
 	if sessionStatusOK(h.status) {
-		sdk.s = readSessionData(sdk.r, &h)
 		sdk.tVars = readVariableHeaders(sdk.r, &h)
+		sdk.sessionData = &SessionData{}
+		readSessionData(sdk)
 		readVariableValues(sdk)
 	}
 }
