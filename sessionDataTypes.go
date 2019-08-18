@@ -16,7 +16,8 @@ func (sv *SessionVariable) UnmarshalYAML(unmarshal func(interface{}) error) erro
 	if err != nil {
 		return err
 	}
-	sv.Value = &sv.Original
+
+	sv.Value = sv.Original
 	return nil
 }
 
